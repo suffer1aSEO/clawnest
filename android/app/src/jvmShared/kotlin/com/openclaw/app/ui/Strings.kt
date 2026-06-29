@@ -137,6 +137,19 @@ class Strings(val en: Boolean) {
     val svcText = p("Агент работает в фоне", "Agent running in the background")
     val svcChannel = p("Соединение", "Connection")
     val msgChannel = p("Сообщения агента", "Agent messages")
+
+    // desktop (Mac) layout
+    val newDialog = p("Новый диалог", "New dialog")
+    val history = p("История", "History")
+    val agentBranch = p("ветка истории этого агента", "this agent's history branch")
+    val model = p("Модель", "Model")
+    val commandLog = p("Журнал команд", "Command log")
+    val noCommands = p("Пока пусто", "Empty for now")
+    val channelDesc = p("WebSocket внутри SSH · аутентификация по токену · audit-log на сервере.",
+        "WebSocket inside SSH · token auth · server audit-log on.")
+    val reconnectBtn = p("Переподключить", "Reconnect")
+    val disconnect = p("Отключиться", "Disconnect")
+    val aboutNoTrackers = p("без трекеров", "no trackers")
 }
 
 val LocalStrings = staticCompositionLocalOf { Strings(false) }

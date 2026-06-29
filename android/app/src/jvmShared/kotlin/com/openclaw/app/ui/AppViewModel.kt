@@ -1,28 +1,28 @@
 package com.openclaw.app.ui
 
-import android.app.Application
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.os.Handler
-import android.os.Looper
-import android.provider.OpenableColumns
-import androidx.core.content.FileProvider
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
 import com.openclaw.app.AuditEntry
-import com.openclaw.app.LinkService
 import com.openclaw.app.ModelInfo
-import com.openclaw.app.Notifier
 import com.openclaw.app.OpenClawClient
 import com.openclaw.app.OpenClawListener
 import com.openclaw.app.Persona
+import com.openclaw.app.PickedFile
 import com.openclaw.app.SshLink
+import com.openclaw.app.appCacheDirPath
+import com.openclaw.app.notifyUser
+import com.openclaw.app.openInSystemViewer
+import com.openclaw.app.settingsGet
+import com.openclaw.app.settingsPut
+import com.openclaw.app.startKeepAlive
+import com.openclaw.app.stopKeepAlive
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -37,7 +37,7 @@ enum class ConnState { Disconnected, Connecting, Ready }
  *  each agent has its own isolated context. */
 data class Proj(val id: String, val name: String, val cwd: String? = null, val shared: Boolean = false)
 
-/** A file the user picked and copied to cache, staged to upload with the next message. */
+/** A file the user picked and staged to upload with the next message. */
 data class Staged(val localPath: String, val name: String, val isImage: Boolean)
 
 private val IMAGE_EXT = Regex("(?i).*\\.(png|jpe?g|gif|webp|bmp|heic|heif)$")
@@ -48,11 +48,11 @@ val DEFAULT_MODELS = listOf(
     ModelInfo("claude-haiku-4-5", "Haiku 4.5"),
 )
 
-class AppViewModel(app: Application) : AndroidViewModel(app), OpenClawListener {
+class AppViewModel : OpenClawListener {
 
-    private val prefs = app.getSharedPreferences("openclaw", Context.MODE_PRIVATE)
-    private val main = Handler(Looper.getMainLooper())
-    private val link = SshLink(app)
+    // All UI state lives here; mutations are marshalled to the main thread via ui{}.
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val link = SshLink()
     private var client: OpenClawClient? = null
 
     // connection form
@@ -94,7 +94,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app), OpenClawListener {
     // otherwise a drop that sets conn=Connecting would block its own scheduled reconnect.
     private var connecting = false
     // Force-fails a connect that hangs (half-open SSH/WS after a network/VPN switch).
-    private var watchdog: Runnable? = null
+    private var watchdogJob: Job? = null
 
     init {
         loadPrefs()
@@ -103,13 +103,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app), OpenClawListener {
     // ---------- prefs ----------
 
     private fun loadPrefs() {
-        lang.value = prefs.getString("lang", "ru") ?: "ru"
-        host.value = prefs.getString("host", "") ?: ""
-        sshUser.value = prefs.getString("ssh_user", "root") ?: "root"
-        sshPass.value = prefs.getString("ssh_pass", "") ?: ""
-        claudeKey.value = prefs.getString("claude_key", "") ?: ""
+        lang.value = settingsGet("lang", "ru")
+        host.value = settingsGet("host", "")
+        sshUser.value = settingsGet("ssh_user", "root")
+        sshPass.value = settingsGet("ssh_pass", "")
+        claudeKey.value = settingsGet("claude_key", "")
         projects.clear()
-        prefs.getString("projects", null)?.let { raw ->
+        settingsGet("projects", "").ifBlank { null }?.let { raw ->
             runCatching { JSONArray(raw) }.getOrNull()?.let { a ->
                 for (i in 0 until a.length()) {
                     when (val el = a.get(i)) {
@@ -120,9 +120,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app), OpenClawListener {
             }
         }
         if (projects.isEmpty()) projects.add(Proj("default", "default"))
-        currentProjectId.value = prefs.getString("current_project", "default") ?: "default"
+        currentProjectId.value = settingsGet("current_project", "default")
         if (projects.none { it.id == currentProjectId.value }) currentProjectId.value = projects.first().id
-        prefs.getString("persona_models", null)?.let { raw ->
+        settingsGet("persona_models", "").ifBlank { null }?.let { raw ->
             runCatching { JSONObject(raw) }.getOrNull()?.let { o ->
                 for (k in o.keys()) personaModel[k] = o.getString(k)
             }
@@ -137,31 +137,29 @@ class AppViewModel(app: Application) : AndroidViewModel(app), OpenClawListener {
 
     private fun saveProjects() {
         val a = projectsToJson()
-        prefs.edit().putString("projects", a.toString())
-            .putString("current_project", currentProjectId.value).apply()
+        settingsPut("projects", a.toString())
+        settingsPut("current_project", currentProjectId.value)
         runCatching { client?.saveProjects(a) } // mirror to the server so a reinstall restores it
     }
 
     private fun savePersonaModels() {
         val o = JSONObject(); personaModel.forEach { (k, v) -> o.put(k, v) }
-        prefs.edit().putString("persona_models", o.toString()).apply()
+        settingsPut("persona_models", o.toString())
     }
 
     /** Persist connection creds so a cold start / reconnect needs no re-entry. */
     private fun saveCreds() {
-        prefs.edit()
-            .putString("host", host.value.trim())
-            .putString("ssh_user", sshUser.value.trim().ifEmpty { "root" })
-            .putString("ssh_pass", sshPass.value)
-            .putString("claude_key", claudeKey.value.trim())
-            .apply()
+        settingsPut("host", host.value.trim())
+        settingsPut("ssh_user", sshUser.value.trim().ifEmpty { "root" })
+        settingsPut("ssh_pass", sshPass.value)
+        settingsPut("claude_key", claudeKey.value.trim())
     }
 
     fun hasSavedCreds(): Boolean = host.value.isNotBlank() && sshPass.value.isNotBlank()
 
     fun setLang(code: String) {
         lang.value = code
-        prefs.edit().putString("lang", code).apply()
+        settingsPut("lang", code)
     }
 
     // ---------- derived ----------
@@ -248,7 +246,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app), OpenClawListener {
         conn.value = ConnState.Connecting
         statusMsg.value = t().stConnecting
         armWatchdog() // never let a single attempt hang forever
-        viewModelScope.launch {
+        scope.launch {
             // Tear down any stale link/socket before re-establishing (reconnect path).
             client?.close(); client = null
             withContext(Dispatchers.IO) { runCatching { link.close() } }
@@ -257,21 +255,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app), OpenClawListener {
                     link.connect(host.value.trim(), sshUser.value.trim().ifEmpty { "root" }, sshPass.value, claudeKey.value.trim())
                 }
             } catch (e: Exception) {
-                ui {
-                    connecting = false
-                    cancelWatchdog()
-                    conn.value = ConnState.Disconnected
-                    statusMsg.value = t().stConnectFail(e.message)
-                    scheduleReconnect()
-                }
+                connecting = false
+                cancelWatchdog()
+                conn.value = ConnState.Disconnected
+                statusMsg.value = t().stConnectFail(e.message)
+                scheduleReconnect()
                 return@launch
             }
-            ui {
-                statusMsg.value = t().stAuth
-                // connecting stays true until Ready (onPersonas) / a drop / the watchdog.
-                client = OpenClawClient(ep.wsUrl, this@AppViewModel).also {
-                    it.connect { it.auth(ep.token) }
-                }
+            statusMsg.value = t().stAuth
+            // connecting stays true until Ready (onPersonas) / a drop / the watchdog.
+            client = OpenClawClient(ep.wsUrl, this@AppViewModel).also {
+                it.connect { it.auth(ep.token) }
             }
         }
     }
@@ -280,23 +274,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app), OpenClawListener {
      *  attempt (close link+socket — which unblocks any stuck blocking call) and retry. */
     private fun armWatchdog() {
         cancelWatchdog()
-        val r = Runnable {
+        watchdogJob = scope.launch {
+            delay(30_000)
             if (conn.value != ConnState.Ready) {
                 connecting = false
                 client?.close(); client = null
-                viewModelScope.launch { withContext(Dispatchers.IO) { runCatching { link.close() } } }
+                withContext(Dispatchers.IO) { runCatching { link.close() } }
                 conn.value = ConnState.Disconnected
                 statusMsg.value = t().stTimeout
                 scheduleReconnect()
             }
         }
-        watchdog = r
-        main.postDelayed(r, 30_000)
     }
 
     private fun cancelWatchdog() {
-        watchdog?.let { main.removeCallbacks(it) }
-        watchdog = null
+        watchdogJob?.cancel()
+        watchdogJob = null
     }
 
     /** From the splash: let the user edit server creds (stops auto-reconnect, shows the form). */
@@ -326,10 +319,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app), OpenClawListener {
         if (userDisconnected || reconnecting || !hasSavedCreds()) return
         reconnecting = true
         statusMsg.value = t().stReconnecting
-        main.postDelayed({
+        scope.launch {
+            delay(2000)
             reconnecting = false
             if (!userDisconnected && conn.value != ConnState.Ready) connect()
-        }, 2000)
+        }
     }
 
     /** A live turn died with the socket — close out its bubble so the UI isn't stuck. */
@@ -345,11 +339,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app), OpenClawListener {
         connecting = false
         cancelWatchdog()
         client?.close(); client = null
-        viewModelScope.launch { withContext(Dispatchers.IO) { link.close() } }
+        scope.launch { withContext(Dispatchers.IO) { runCatching { link.close() } } }
         personas.clear()
         conn.value = ConnState.Disconnected
         statusMsg.value = t().stDisconnected
-        runCatching { LinkService.stop(getApplication<Application>()) }
+        runCatching { stopKeepAlive() }
     }
 
     fun send(text: String) {
@@ -379,21 +373,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app), OpenClawListener {
         // so the agent can Read them (the backend's _FILE_PROTOCOL explains the format).
         busy.value = true
         bump()
-        viewModelScope.launch {
+        scope.launch {
             try {
                 withContext(Dispatchers.IO) {
                     uploads.forEach { (localPath, remote) -> link.uploadFile(localPath, remote) }
                 }
             } catch (e: Exception) {
-                ui { um.error = t().stUploadFail(e.message); busy.value = false }
+                um.error = t().stUploadFail(e.message); busy.value = false
                 return@launch
             }
             val notes = uploads.joinToString("") { "\n[Вложение: ${it.second}]" }
-            ui {
-                busy.value = false
-                persistMessage(tkey, um)
-                startTurn(pid, th, (body + notes).trim(), tkey)
-            }
+            busy.value = false
+            persistMessage(tkey, um)
+            startTurn(pid, th, (body + notes).trim(), tkey)
         }
     }
 
@@ -413,39 +405,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app), OpenClawListener {
 
     // ---------- attachments ----------
 
-    /** Copy a picked file/photo into cache and stage it for the next message. */
-    fun stageAttachment(uri: Uri) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val app = getApplication<Application>()
-                val cr = app.contentResolver
-                val name = queryDisplayName(uri) ?: "file_${System.currentTimeMillis()}"
-                val isImage = cr.getType(uri)?.startsWith("image/") == true || IMAGE_EXT.matches(name)
-                val dir = File(app.cacheDir, "outgoing").apply { mkdirs() }
-                val safe = name.replace(Regex("[^A-Za-z0-9._-]"), "_")
-                val f = File(dir, "${System.currentTimeMillis()}_$safe")
-                (cr.openInputStream(uri) ?: throw RuntimeException(if (lang.value == "en") "can't open file" else "не открыть файл"))
-                    .use { input -> f.outputStream().use { input.copyTo(it) } }
-                ui { staged.add(Staged(f.absolutePath, name, isImage)) }
-            } catch (e: Exception) {
-                ui { statusMsg.value = t().stAttachFail(e.message) }
-            }
-        }
+    /** Stage a picked file/photo (already copied to a real local path) for the next message. */
+    fun stageAttachment(p: PickedFile) {
+        staged.add(Staged(p.path, p.name, p.isImage))
     }
 
     fun removeStaged(index: Int) { if (index in staged.indices) staged.removeAt(index) }
 
     /** Download a file the agent returned and open it with a viewer/share target. */
     fun openFileSeg(seg: FileSeg) {
-        seg.localPath?.let { openWithViewer(File(it)); return }
+        seg.localPath?.let { openInSystemViewer(it); return }
         if (seg.downloading || seg.remotePath.isBlank()) return
         seg.downloading = true; seg.error = null
-        viewModelScope.launch {
+        scope.launch {
             try {
                 val f = withContext(Dispatchers.IO) { downloadToCache(seg) }
-                ui { seg.downloading = false; seg.localPath = f.absolutePath; openWithViewer(f) }
+                seg.downloading = false; seg.localPath = f.absolutePath; openInSystemViewer(f.absolutePath)
             } catch (e: Exception) {
-                ui { seg.downloading = false; seg.error = e.message }
+                seg.downloading = false; seg.error = e.message
             }
         }
     }
@@ -456,36 +433,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app), OpenClawListener {
     private fun fetchForDisplay(seg: FileSeg) {
         if (seg.localPath != null || seg.downloading || seg.remotePath.isBlank()) return
         seg.downloading = true
-        viewModelScope.launch {
+        scope.launch {
             try {
                 val f = withContext(Dispatchers.IO) { downloadToCache(seg) }
-                ui { seg.downloading = false; seg.localPath = f.absolutePath }
+                seg.downloading = false; seg.localPath = f.absolutePath
             } catch (e: Exception) {
-                ui { seg.downloading = false; seg.error = e.message }
+                seg.downloading = false; seg.error = e.message
             }
         }
     }
 
     private fun downloadToCache(seg: FileSeg): File {
-        val app = getApplication<Application>()
-        val dir = File(app.cacheDir, "incoming").apply { mkdirs() }
+        val dir = File(appCacheDirPath(), "incoming").apply { mkdirs() }
         val safe = seg.name.replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "file" }
         val f = File(dir, "${System.currentTimeMillis()}_$safe")
         link.downloadFile(seg.remotePath, f)
         return f
-    }
-
-    private fun openWithViewer(f: File) {
-        try {
-            val ctx = getApplication<Application>()
-            val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".fileprovider", f)
-            val mime = ctx.contentResolver.getType(uri) ?: "*/*"
-            val view = Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime)
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            ctx.startActivity(Intent.createChooser(view, t().openFile).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        } catch (e: Exception) {
-            statusMsg.value = t().stOpenFail(e.message)
-        }
     }
 
     /** Pull `[[FILE:/path]]` markers out of the finished reply into downloadable attachments. */
@@ -506,14 +469,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app), OpenClawListener {
         }
     }
 
-    private fun queryDisplayName(uri: Uri): String? = try {
-        getApplication<Application>().contentResolver
-            .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-            ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
-    } catch (e: Exception) { null }
-
     /** Agent asked a multiple-choice question — attach it to the live reply as interactive options. */
-    override fun onQuestion(id: String, questions: org.json.JSONArray) = ui {
+    override fun onQuestion(id: String, questions: JSONArray) = ui {
         val qs = parseQuestions(questions)
         if (qs.isEmpty()) return@ui
         val target = streamingMsg ?: currentThread().lastOrNull { it.role == "assistant" }
@@ -540,10 +497,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app), OpenClawListener {
         busy.value = false
     }
 
-    // ---------- listener (OkHttp threads -> main) ----------
+    // ---------- listener (network threads -> main) ----------
 
     private fun ui(block: () -> Unit) {
-        main.post(block)
+        scope.launch { block() }
     }
 
     override fun onAuthOk(models: List<ModelInfo>) = ui {
@@ -565,7 +522,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app), OpenClawListener {
         cancelWatchdog()
         showForm.value = false
         saveCreds() // persist only after a confirmed-good connection (so the form never returns for good creds)
-        runCatching { LinkService.start(getApplication<Application>()) }
+        runCatching { startKeepAlive() }
     }
 
     override fun onAudit(entries: List<AuditEntry>) = ui {
@@ -619,7 +576,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app), OpenClawListener {
             bump()
             if (key != threadKey()) {
                 val name = persona(key.substringAfterLast(':'))?.name ?: t().agent
-                Notifier.show(getApplication<Application>(), name, text)
+                notifyUser(name, text)
             }
         }
     }

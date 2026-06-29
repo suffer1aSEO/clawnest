@@ -1,11 +1,9 @@
 package com.openclaw.app.ui
 
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,29 +25,20 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import android.view.ViewTreeObserver
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalView
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavHostController
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
+import com.openclaw.app.keyboardOpen
 
 private data class Tab(val route: String, val icon: ImageVector)
 
@@ -79,37 +68,31 @@ fun AppNav(vm: AppViewModel) {
 
 @Composable
 private fun MainScaffold(vm: AppViewModel, reconnecting: Boolean) {
-    val nav = rememberNavController()
     val accent = personaColor(vm.currentPersona()?.themeColor)
     val kbOpen = keyboardOpen()
+    var route by remember { mutableStateOf("chat") }
+    // Non-null => the persona editor is open over the current tab ("_new" for a fresh persona).
+    var editorId by remember { mutableStateOf<String?>(null) }
     Scaffold(
         containerColor = Bg,
-        bottomBar = { if (!kbOpen) BottomBar(nav, accent) },
+        bottomBar = { if (!kbOpen && editorId == null) BottomBar(route, accent) { route = it } },
     ) { pad ->
         Column(Modifier.padding(pad)) {
             if (reconnecting) ReconnectBanner()
-            NavHost(
-                nav,
-                startDestination = "chat",
-                modifier = Modifier.weight(1f),
-                enterTransition = { fadeIn(tween(110)) },
-                exitTransition = { fadeOut(tween(110)) },
-                popEnterTransition = { fadeIn(tween(110)) },
-                popExitTransition = { fadeOut(tween(110)) },
-            ) {
-                composable("chat") { ChatScreen(vm) }
-                composable("agents") {
-                    AgentsScreen(
+            Box(Modifier.weight(1f)) {
+                val ed = editorId
+                if (ed != null) {
+                    PersonaEditorScreen(vm, ed, onBack = { editorId = null })
+                } else when (route) {
+                    "chat" -> ChatScreen(vm)
+                    "agents" -> AgentsScreen(
                         vm,
-                        onOpenChat = { id -> vm.selectPersona(id); nav.navigate("chat") },
-                        onEdit = { id -> nav.navigate("editor/$id") },
-                        onCreate = { nav.navigate("editor/_new") },
+                        onOpenChat = { id -> vm.selectPersona(id); route = "chat" },
+                        onEdit = { id -> editorId = id },
+                        onCreate = { editorId = "_new" },
                     )
-                }
-                composable("journal") { JournalScreen(vm) }
-                composable("settings") { SettingsScreen(vm) }
-                composable("editor/{id}") { entry ->
-                    PersonaEditorScreen(vm, entry.arguments?.getString("id"), onBack = { nav.popBackStack() })
+                    "journal" -> JournalScreen(vm)
+                    "settings" -> SettingsScreen(vm)
                 }
             }
         }
@@ -155,9 +138,7 @@ private fun ConnectingSplash(vm: AppViewModel) {
 }
 
 @Composable
-private fun BottomBar(nav: NavHostController, accent: Color) {
-    val current by nav.currentBackStackEntryAsState()
-    val route = current?.destination?.route
+private fun BottomBar(route: String, accent: Color, onSelect: (String) -> Unit) {
     val s = LocalStrings.current
     // Nav sits on Bg (not a Surface bar) with no pill indicator, so it reads as a
     // separate row of icons below the floating input — matching the mockup.
@@ -172,13 +153,7 @@ private fun BottomBar(nav: NavHostController, accent: Color) {
             }
             NavigationBarItem(
                 selected = selected,
-                onClick = {
-                    if (!selected) nav.navigate(tab.route) {
-                        popUpTo("chat") { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                },
+                onClick = { if (!selected) onSelect(tab.route) },
                 icon = { Icon(tab.icon, label) },
                 label = { Text(label) },
                 colors = NavigationBarItemDefaults.colors(
@@ -191,19 +166,4 @@ private fun BottomBar(nav: NavHostController, accent: Color) {
             )
         }
     }
-}
-
-/** True while the soft keyboard (IME) is visible — used to hide the bottom bar. */
-@Composable
-private fun keyboardOpen(): Boolean {
-    val view = LocalView.current
-    var open by remember { mutableStateOf(false) }
-    DisposableEffect(view) {
-        val listener = ViewTreeObserver.OnGlobalLayoutListener {
-            open = ViewCompat.getRootWindowInsets(view)?.isVisible(WindowInsetsCompat.Type.ime()) ?: false
-        }
-        view.viewTreeObserver.addOnGlobalLayoutListener(listener)
-        onDispose { view.viewTreeObserver.removeOnGlobalLayoutListener(listener) }
-    }
-    return open
 }

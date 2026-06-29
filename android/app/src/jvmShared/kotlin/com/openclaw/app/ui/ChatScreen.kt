@@ -1,8 +1,5 @@
 package com.openclaw.app.ui
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -63,9 +60,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import com.openclaw.app.FileImage
 import com.openclaw.app.Persona
-import java.io.File
+import com.openclaw.app.rememberAttachmentPicker
 
 @Composable
 fun ChatScreen(vm: AppViewModel) {
@@ -83,12 +80,8 @@ fun ChatScreen(vm: AppViewModel) {
     var attachMenu by remember { mutableStateOf(false) }
     var input by remember { mutableStateOf("") }
 
-    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        uri?.let { vm.stageAttachment(it) }
-    }
-    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let { vm.stageAttachment(it) }
-    }
+    val pickPhoto = rememberAttachmentPicker(imagesOnly = true) { it?.let(vm::stageAttachment) }
+    val pickFile = rememberAttachmentPicker(imagesOnly = false) { it?.let(vm::stageAttachment) }
 
     Column(Modifier.fillMaxWidth().background(Bg)) {
         // ---- header ----
@@ -238,11 +231,11 @@ fun ChatScreen(vm: AppViewModel) {
                 DropdownMenu(expanded = attachMenu, onDismissRequest = { attachMenu = false }) {
                     DropdownMenuItem(text = { Text(s.attachPhoto) }, onClick = {
                         attachMenu = false
-                        pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        pickPhoto()
                     })
                     DropdownMenuItem(text = { Text(s.attachFile) }, onClick = {
                         attachMenu = false
-                        pickFile.launch(arrayOf("*/*"))
+                        pickFile()
                     })
                 }
             }
@@ -346,7 +339,7 @@ private fun PersonaChip(p: Persona, active: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun MessageItem(msg: ChatMsg, accent: Color, vm: AppViewModel) {
+internal fun MessageItem(msg: ChatMsg, accent: Color, vm: AppViewModel) {
     // SelectionContainer makes every bubble's text long-press-selectable + copyable.
     if (msg.role == "user") {
         val text = msg.plain()
@@ -394,8 +387,8 @@ private fun AttachmentBlock(seg: FileSeg, accent: Color, vm: AppViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         when {
             // Neat fixed square thumbnail, centre-cropped — like the ChatGPT web chat. Tap = open full.
-            seg.isImage && seg.localPath != null -> AsyncImage(
-                model = File(seg.localPath!!),
+            seg.isImage && seg.localPath != null -> FileImage(
+                path = seg.localPath!!,
                 contentDescription = seg.name,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.size(THUMB).clip(RoundedCornerShape(14.dp))
@@ -527,8 +520,8 @@ private fun StagedChip(st: Staged, onRemove: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (st.isImage) {
-                AsyncImage(
-                    model = File(st.localPath), contentDescription = st.name,
+                FileImage(
+                    path = st.localPath, contentDescription = st.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)),
                 )

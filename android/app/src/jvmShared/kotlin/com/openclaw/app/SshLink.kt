@@ -1,6 +1,5 @@
 package com.openclaw.app
 
-import android.content.Context
 import com.jcraft.jsch.ChannelExec
 import com.jcraft.jsch.ChannelSftp
 import com.jcraft.jsch.JSch
@@ -18,12 +17,11 @@ data class AgentEndpoint(val wsUrl: String, val token: String)
  * SSH connection (SSH-encrypted) — no VPN, no public port. The app then just talks
  * plain ws:// to 127.0.0.1:<forwarded port>.
  */
-class SshLink(private val context: Context) {
+class SshLink {
 
     private var session: Session? = null
 
-    private fun en() = context.getSharedPreferences("openclaw", Context.MODE_PRIVATE)
-        .getString("lang", "ru") == "en"
+    private fun en() = settingsGet("lang", "ru") == "en"
     private fun m(ru: String, eng: String) = if (en()) eng else ru
 
     // Try standard SSH (22) first, then 443 — many mobile/Wi-Fi networks block 22
@@ -117,7 +115,7 @@ class SshLink(private val context: Context) {
     }
 
     private fun runProvision(s: Session, claudeKey: String): JSONObject {
-        val script = context.assets.open("provision.sh").bufferedReader().use { it.readText() }
+        val script = loadProvisionScript()
             .replace("__CLAUDE_KEY__", shEscape(claudeKey))
         // Bound provision with a socket timeout: after a network/VPN switch the old session
         // can go half-open, and an unbounded read here would hang the whole connect forever.
