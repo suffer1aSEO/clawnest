@@ -9,6 +9,13 @@ No middleman cloud, no domain, no public port — everything rides inside an SSH
 
 🌐 [English](#english) · [Русский](#русский) · 📄 [MIT License](LICENSE)
 
+<p align="center">
+  <img src="docs/screenshots/chat.jpg" alt="Chat with an agent persona" width="270">
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/agents.jpg" alt="Agent personas" width="270">
+</p>
+<p align="center"><sub>Chat with a persona · the agents list — each a preset of prompt, tools and model</sub></p>
+
 ---
 
 ## English
