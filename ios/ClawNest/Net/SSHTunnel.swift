@@ -1,6 +1,7 @@
 import Foundation
 import NIOCore
 import NIOPosix
+import NIOSSH
 import Citadel
 
 enum TunnelError: LocalizedError {

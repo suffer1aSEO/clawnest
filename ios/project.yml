@@ -21,6 +21,11 @@ packages:
   swift-nio:
     url: https://github.com/apple/swift-nio.git
     from: 2.65.0
+  # NIOSSH provides SSHChannelType (used by createDirectTCPIPChannel). Citadel 0.8 depends on
+  # THIS fork (0.3.2..<0.4.0), not apple/swift-nio-ssh — must match to avoid a duplicate module.
+  swift-nio-ssh:
+    url: https://github.com/Joannis/swift-nio-ssh.git
+    from: 0.3.2
 
 targets:
   ClawNest:
@@ -37,6 +42,8 @@ targets:
         product: NIOCore
       - package: swift-nio
         product: NIOPosix
+      - package: swift-nio-ssh
+        product: NIOSSH
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.openclaw.clawnest
