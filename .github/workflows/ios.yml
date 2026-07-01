@@ -17,12 +17,17 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-14
+    # macOS 15 image ships Xcode 16, which can read the project format (objectVersion 77)
+    # that the current XcodeGen emits. (macOS 14 / Xcode 15 rejects it.)
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
-      - name: Show Xcode version
-        run: xcodebuild -version
+      - name: Select latest Xcode 16
+        run: |
+          LATEST=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$LATEST" ]; then sudo xcode-select -s "$LATEST"; fi
+          xcodebuild -version
 
       - name: Install XcodeGen
         run: brew install xcodegen
