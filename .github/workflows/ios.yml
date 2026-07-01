@@ -1,0 +1,74 @@
+name: iOS build (unsigned IPA)
+
+# Builds an UNSIGNED ClawNest.ipa on a macOS runner so it can be installed with
+# AltStore / Sideloadly (they re-sign it with your own Apple ID at install time).
+# Download the artifact from the run's "Artifacts" section.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios.yml'
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Resolve Swift packages
+        working-directory: ios
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project ClawNest.xcodeproj \
+            -scheme ClawNest
+
+      - name: Build (unsigned, generic iOS device)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ClawNest.xcodeproj \
+            -scheme ClawNest \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            clean build
+
+      - name: Package unsigned .ipa
+        working-directory: ios
+        run: |
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -1)
+          if [ -z "$APP" ]; then echo "No .app produced"; exit 1; fi
+          echo "Packaging $APP"
+          rm -rf Payload ClawNest-unsigned.ipa
+          mkdir Payload
+          cp -R "$APP" Payload/
+          zip -qry ClawNest-unsigned.ipa Payload
+          ls -lh ClawNest-unsigned.ipa
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClawNest-unsigned-ipa
+          path: ios/ClawNest-unsigned.ipa
+          if-no-files-found: error

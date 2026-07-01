@@ -28,7 +28,34 @@ The **backend is unchanged** — this app runs the same `backend/openclaw_agent`
 
 ---
 
-## Requirements
+## Easiest path — AltStore with the prebuilt IPA (no Xcode needed)
+
+You don't have to build in Xcode yourself: a GitHub Actions workflow
+([`.github/workflows/ios.yml`](../.github/workflows/ios.yml)) builds an **unsigned**
+`ClawNest-unsigned.ipa` on every push. **AltStore** re-signs it with *your* Apple ID at
+install time, so an unsigned IPA is exactly what it wants.
+
+1. **Get the IPA.** On GitHub open **Actions ▸ “iOS build (unsigned IPA)” ▸** the latest green
+   run ▸ **Artifacts ▸ `ClawNest-unsigned-ipa`**. Download and unzip it → `ClawNest-unsigned.ipa`.
+   (Or trigger it manually: Actions ▸ that workflow ▸ **Run workflow**.)
+2. **Install AltStore** (once): download **AltServer** from [altstore.io](https://altstore.io)
+   onto your Mac/PC, plug in the iPhone, and use AltServer to install the **AltStore** app onto
+   the phone (it walks you through it and asks for your Apple ID).
+3. **Install ClawNest:** with AltServer running and the phone connected, open the
+   `ClawNest-unsigned.ipa` with AltServer (**Install .ipa**), or drop it into AltStore on the
+   phone. It signs with your Apple ID and installs.
+4. **Trust it:** on the phone, **Settings ▸ General ▸ VPN & Device Management ▸ [your Apple ID]
+   ▸ Trust**.
+5. **Keep it alive:** a free Apple ID signature lasts **7 days**. Keep **AltStore** installed
+   and AltServer reachable on your Wi-Fi — AltStore **re-signs automatically** in the
+   background so the app keeps working. (Paid Apple Developer account = 1 year, no refresh.)
+
+That's the whole no-Xcode route. The sections below are for building it yourself in Xcode
+instead.
+
+---
+
+## Requirements (for building it yourself in Xcode)
 
 - A **Mac with Xcode 15+** (the full app, not just Command Line Tools) — required to build,
   sign and install any iOS app.

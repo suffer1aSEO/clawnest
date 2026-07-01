@@ -50,3 +50,14 @@ targets:
         # Set your own team in Xcode (Signing & Capabilities) after generating.
         # DEVELOPMENT_TEAM: XXXXXXXXXX
         CODE_SIGN_STYLE: Automatic
+
+# A shared scheme so `xcodebuild -scheme ClawNest` works in CI (GitHub Actions).
+schemes:
+  ClawNest:
+    build:
+      targets:
+        ClawNest: all
+    run:
+      config: Debug
+    archive:
+      config: Release
