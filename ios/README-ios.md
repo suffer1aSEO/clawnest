@@ -61,7 +61,7 @@ instead.
   sign and install any iOS app.
 - An **Apple ID** (free is enough for sideloading; a paid Apple Developer account gives
   longer-lived signatures).
-- An **iPhone** (iOS 16+).
+- An **iPhone** (iOS 17+).
 
 > This project was scaffolded on a machine **without Xcode**, so the SSH/NIO layer
 > (`SSHTunnel.swift`, `ForwardHandler.swift`) could not be compiled here. The pure app

@@ -93,7 +93,7 @@ SwiftNIO), streams replies, runs tool/terminal blocks and answers interactive qu
 phone stays a thin client, no cloud. Because it isn't on the App Store, you build it yourself on
 a Mac and **sideload** it onto your iPhone.
 
-Quick start — needs a **Mac with Xcode 15+**, an **Apple ID** and an **iPhone (iOS 16+)**:
+Quick start — needs a **Mac with Xcode 15+**, an **Apple ID** and an **iPhone (iOS 17+)**:
 ```bash
 brew install xcodegen
 cd ios
@@ -163,7 +163,7 @@ SwiftNIO), стримит ответы, показывает tool/terminal-бл�
 остаётся тонким клиентом, без облака. В App Store его нет, поэтому собираешь сам на Mac и
 ставишь **сайдлоадом** на iPhone.
 
-Быстрый старт — нужен **Mac с Xcode 15+**, **Apple ID** и **iPhone (iOS 16+)**:
+Быстрый старт — нужен **Mac с Xcode 15+**, **Apple ID** и **iPhone (iOS 17+)**:
 ```bash
 brew install xcodegen
 cd ios

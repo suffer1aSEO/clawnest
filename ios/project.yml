@@ -9,7 +9,7 @@ name: ClawNest
 options:
   bundleIdPrefix: com.openclaw
   deploymentTarget:
-    iOS: "16.0"
+    iOS: "17.0"
   createIntermediateGroups: true
 
 packages:
@@ -26,7 +26,7 @@ targets:
   ClawNest:
     type: application
     platform: iOS
-    deploymentTarget: "16.0"
+    deploymentTarget: "17.0"
     sources:
       - path: ClawNest
         excludes:
