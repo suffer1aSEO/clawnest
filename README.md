@@ -9,9 +9,10 @@
   <b>Карманный пульт к твоим ИИ-агентам — на твоём собственном сервере.</b>
 </p>
 
-ClawNest is a native Android client to a Claude-powered agent daemon that runs on **your**
-server. The phone is a thin client; the agent, its tools and your history live on your VPS.
-No middleman cloud, no domain, no public port — everything rides inside an SSH tunnel.
+ClawNest is a native client — **Android, iPhone (iOS) and macOS** — to a Claude-powered agent
+daemon that runs on **your** server. The phone is a thin client; the agent, its tools and your
+history live on your VPS. No middleman cloud, no domain, no public port — everything rides
+inside an SSH tunnel.
 
 <p align="center">
   🌐 <a href="#english">English</a> · <a href="#русский">Русский</a> · 📄 <a href="LICENSE">MIT License</a>
@@ -85,6 +86,27 @@ keytool -genkeypair -v -keystore android/clawnest-release.jks \
 # → app/build/outputs/apk/release/app-release.apk
 ```
 
+### iOS (iPhone) — install without the App Store
+A native **SwiftUI** port of the same thin client lives in [`ios/`](ios). It reaches the same
+agent over the same on-device SSH tunnel (via [Citadel](https://github.com/orlandos-nl/Citadel)/
+SwiftNIO), streams replies, runs tool/terminal blocks and answers interactive questions — the
+phone stays a thin client, no cloud. Because it isn't on the App Store, you build it yourself on
+a Mac and **sideload** it onto your iPhone.
+
+Quick start — needs a **Mac with Xcode 15+**, an **Apple ID** and an **iPhone (iOS 16+)**:
+```bash
+brew install xcodegen
+cd ios
+xcodegen generate          # project.yml → ClawNest.xcodeproj
+open ClawNest.xcodeproj
+```
+In Xcode: set your **Team** under *Signing & Capabilities*, then either **Run** straight to a
+plugged-in iPhone, or **Product ▸ Archive → Distribute** to export an `.ipa` and install it with
+**[AltStore](https://altstore.io)** / **[Sideloadly](https://sideloadly.io)** (free Apple ID =
+re-sign every 7 days, which AltStore automates; a paid dev account = 1 year). A built-in
+**Demo mode** runs the whole UI with no server, so you can try it before wiring up a VPS.
+Full step-by-step guide: **[`ios/README-ios.md`](ios/README-ios.md)**.
+
 ### Server (backend)
 The app installs and configures the agent on your VPS automatically (over SSH) the first time
 you connect — just enter the server IP, the SSH password and a Claude key. The daemon lives in
@@ -133,6 +155,27 @@ WebSocket-порта и никакого VPN. При первом подключ
 ### Сборка приложения
 Нужно: **JDK 17**, **Android SDK 34**, **Gradle 8.9**. Команды сборки — см. раздел
 [Build the Android app](#build-the-android-app) выше (debug и подписанный release).
+
+### iOS (iPhone) — установка без App Store
+Нативный **SwiftUI**-порт того же тонкого клиента лежит в [`ios/`](ios). Он ходит к тому же
+агенту по тому же SSH-туннелю прямо с устройства (через [Citadel](https://github.com/orlandos-nl/Citadel)/
+SwiftNIO), стримит ответы, показывает tool/terminal-блоки и интерактивные вопросы — телефон
+остаётся тонким клиентом, без облака. В App Store его нет, поэтому собираешь сам на Mac и
+ставишь **сайдлоадом** на iPhone.
+
+Быстрый старт — нужен **Mac с Xcode 15+**, **Apple ID** и **iPhone (iOS 16+)**:
+```bash
+brew install xcodegen
+cd ios
+xcodegen generate          # project.yml → ClawNest.xcodeproj
+open ClawNest.xcodeproj
+```
+В Xcode: выставь **Team** в *Signing & Capabilities*, затем либо **Run** на подключённый
+iPhone, либо **Product ▸ Archive → Distribute** — выгрузить `.ipa` и поставить через
+**[AltStore](https://altstore.io)** / **[Sideloadly](https://sideloadly.io)** (бесплатный
+Apple ID — переподпись раз в 7 дней, AltStore делает её сам; платный dev-аккаунт — на год).
+Встроенный **демо-режим** показывает весь интерфейс без сервера — можно попробовать до
+настройки VPS. Полный пошаговый гайд: **[`ios/README-ios.md`](ios/README-ios.md)**.
 
 ### Сервер
 Приложение само ставит и настраивает агента на VPS (по SSH) при первом подключении — достаточно
