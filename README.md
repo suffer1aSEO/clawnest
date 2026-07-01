@@ -190,4 +190,9 @@ Apple ID — переподпись раз в 7 дней, AltStore делает 
 
 ---
 
-Licensed under the [MIT License](LICENSE).
+## Authors · Авторы
+
+- **[pydantick](https://github.com/pydantick)** — creator of ClawNest · автор и создатель проекта.
+- **[suffer1aSEO](https://github.com/suffer1aSEO)** — iOS client and further development · iOS-клиент и доработки.
+
+Licensed under the [MIT License](LICENSE) · © 2026 pydantick.
