@@ -35,9 +35,11 @@ You don't have to build in Xcode yourself: a GitHub Actions workflow
 `ClawNest-unsigned.ipa` on every push. **AltStore** re-signs it with *your* Apple ID at
 install time, so an unsigned IPA is exactly what it wants.
 
-1. **Get the IPA.** On GitHub open **Actions ▸ “iOS build (unsigned IPA)” ▸** the latest green
-   run ▸ **Artifacts ▸ `ClawNest-unsigned-ipa`**. Download and unzip it → `ClawNest-unsigned.ipa`.
-   (Or trigger it manually: Actions ▸ that workflow ▸ **Run workflow**.)
+1. **Get the IPA.** Download it from the rolling release — a permanent link you can even open
+   on the iPhone in Safari:
+   **[`releases/download/ios-latest/ClawNest-unsigned.ipa`](../../releases/download/ios-latest/ClawNest-unsigned.ipa)**
+   (refreshed by CI on every push to `main`). No unzip needed. *(Alternatively: **Actions ▸ “iOS
+   build (unsigned IPA)” ▸** latest run ▸ **Artifacts**.)*
 2. **Install AltStore** (once): download **AltServer** from [altstore.io](https://altstore.io)
    onto your Mac/PC, plug in the iPhone, and use AltServer to install the **AltStore** app onto
    the phone (it walks you through it and asks for your Apple ID).
